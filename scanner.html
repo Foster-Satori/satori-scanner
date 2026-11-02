@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1f2c44">
+<title>Satori Library Scanner</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700&family=Source+Sans+3:wght@400;600;700&display=swap">
+<style>
+/* Layout: camera view on top, scanned list below, sticky send bar at the bottom */
+:root{
+  --bg:#f3f4f0; --surface:#ffffff; --line:#d8dcd3; --fg:#1c231f; --muted:#5d6760;
+  --navy:#1f2c44; --accent:#2d4f86; --accent-ink:#ffffff; --ok:#2f7a4b; --ok-soft:#dff0e4; --bad:#b3322b;
+  --display:"Bricolage Grotesque","Segoe UI",system-ui,sans-serif; --body:"Source Sans 3","Segoe UI",system-ui,sans-serif;
+}
+@media (prefers-color-scheme: dark){:root{--bg:#121614;--surface:#1b201d;--line:#323a34;--fg:#e6eae5;--muted:#9aa59d;--accent:#8fb0e8;--accent-ink:#0f1a2e;--ok:#7fd19b;--ok-soft:#1e3426;--bad:#f08a80;color-scheme:dark}}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--fg);font-family:var(--body);font-size:16px;line-height:1.4;-webkit-font-smoothing:antialiased;padding-bottom:calc(96px + env(safe-area-inset-bottom,0px))}
+header{background:var(--navy);color:#e8edf6;padding:calc(12px + env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) 12px max(16px,env(safe-area-inset-left,0px));display:flex;align-items:center;gap:10px}
+header b{font-family:var(--display);font-size:1.15rem;flex:1}
+header a{color:#b9c9e6;font-weight:600;text-decoration:none;font-size:.92rem}
+.cam{position:relative;background:#000;aspect-ratio:4/3;max-height:58vh;width:100%;overflow:hidden}
+.cam video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.frame{position:absolute;left:50%;top:50%;width:82%;height:38%;transform:translate(-50%,-50%);border:3px solid #fff;border-radius:14px;box-shadow:0 0 0 100vmax rgb(0 0 0 / .4)}
+.frame::after{content:"";position:absolute;left:8px;right:8px;top:50%;height:2px;background:#ff5a4f;box-shadow:0 0 8px #ff5a4f;animation:sl 1.4s ease-in-out infinite alternate}
+@keyframes sl{from{transform:translateY(-30px)}to{transform:translateY(30px)}}
+.frame.hit{border-color:#5ee08a;box-shadow:0 0 0 100vmax rgb(0 0 0 / .4),0 0 24px #5ee08a}
+.camtools{position:absolute;right:10px;top:10px;display:flex;gap:8px}
+.start{position:absolute;inset:0;display:grid;place-items:center;text-align:center;color:#fff;padding:20px}
+.start p{margin:10px auto 0;max-width:34ch;color:#c9d6ee}
+.status{position:absolute;left:0;right:0;bottom:0;padding:10px 14px;color:#fff;font-weight:600;text-align:center;background:linear-gradient(transparent,rgb(0 0 0 / .65));text-shadow:0 1px 3px #000}
+.btn{font:inherit;font-weight:700;font-size:.95rem;border:1px solid var(--line);background:var(--surface);color:var(--fg);padding:10px 16px;border-radius:10px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;text-decoration:none;justify-content:center}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.big{padding:14px 22px;font-size:1.05rem}
+.btn.light{background:rgb(255 255 255 / .9);color:#111;border-color:transparent;padding:8px 12px;font-size:.88rem}
+.btn:disabled{opacity:.45}
+.btn:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+main{padding:14px max(16px,env(safe-area-inset-right,0px)) 0 max(16px,env(safe-area-inset-left,0px));max-width:720px;margin:0 auto}
+.manual{display:flex;gap:8px;margin-bottom:14px}
+.manual input{flex:1;min-width:0;font:inherit;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--fg)}
+h2{font-family:var(--display);font-size:1.1rem;margin:0 0 10px;display:flex;justify-content:space-between;align-items:baseline}
+h2 button{all:unset;cursor:pointer;font-family:var(--body);font-size:.88rem;color:var(--accent);font-weight:600}
+.list{display:flex;flex-direction:column;gap:8px}
+.item{display:flex;gap:12px;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:8px 10px}
+.item .cv{width:40px;height:58px;border-radius:3px 6px 6px 3px;flex:none;background:#2d4f86;overflow:hidden;position:relative}
+.item .cv img{width:100%;height:100%;object-fit:cover;position:absolute;inset:0}
+.item .tx{flex:1;min-width:0}
+.item .t{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.item .a{color:var(--muted);font-size:.86rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.item .x{all:unset;cursor:pointer;color:var(--muted);font-size:1.4rem;line-height:1;padding:6px 8px}
+.empty{color:var(--muted);text-align:center;padding:20px 10px;border:1px dashed var(--line);border-radius:12px}
+.sendbar{position:fixed;left:0;right:0;bottom:0;background:var(--surface);border-top:1px solid var(--line);padding:12px max(16px,env(safe-area-inset-right,0px)) calc(12px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));display:flex;gap:10px}
+.sendbar .btn{flex:1}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(90px + env(safe-area-inset-bottom,0px));background:var(--fg);color:var(--bg);padding:10px 16px;border-radius:9px;font-weight:600;max-width:calc(100% - 32px);z-index:5}
+.err{color:var(--bad)}
+[hidden]{display:none!important}
+@media (prefers-reduced-motion:reduce){.frame::after{animation:none}}
+</style>
+</head>
+<body>
+<header>
+  <svg width="30" height="30" viewBox="0 0 40 40" aria-hidden="true"><rect width="40" height="40" rx="10" fill="#2d4f86"/><path d="M9 12c4-1.5 7.5-1 11 1.5V30c-3.5-2.5-7-3-11-1.5z" fill="#e8edf6"/><path d="M31 12c-4-1.5-7.5-1-11 1.5V30c3.5-2.5 7-3 11-1.5z" fill="#b9c9e6"/></svg>
+  <b>Library Scanner</b>
+  <a id="backLink" href="#">Back to library</a>
+</header>
+
+<div class="cam">
+  <video id="video" playsinline muted autoplay></video>
+  <div class="frame" id="frame" hidden></div>
+  <div class="camtools"><button class="btn light" id="torchBtn" hidden>Flashlight</button><button class="btn light" id="stopBtn" hidden>Stop camera</button></div>
+  <div class="start" id="startBox"><div>
+    <button class="btn primary big" id="startBtn">Start camera</button>
+    <p id="startMsg">Point the camera at the barcode on the back of each book. It reads on its own.</p>
+  </div></div>
+  <div class="status" id="status" hidden></div>
+</div>
+
+<main>
+  <form class="manual" id="manualForm"><input id="manual" inputmode="numeric" autocomplete="off" placeholder="Or type an ISBN" aria-label="Type an ISBN"><button class="btn">Add</button></form>
+  <h2><span id="listTitle">Scanned books</span><button id="clearBtn" hidden>Clear list</button></h2>
+  <div class="list" id="list"></div>
+</main>
+
+<div class="sendbar"><button class="btn primary big" id="sendBtn" disabled>Send to library</button></div>
+<div class="toast" id="toast" hidden></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js"></script>
+<script>
+/* The library web app this page sends books to. The app passes its own address in ?return=, this is the fallback. */
+const DEFAULT_APP_URL = "https://script.google.com/a/macros/satorischool.net/s/AKfycbwvnJKKW3kqh16ocKUznsf6aVzPKQl5oYPrJyye14cAnIU76HNxQyv__469hmZd1VjR/exec";
+
+const params = new URLSearchParams(location.search);
+const SINGLE = params.get("single") === "1";
+const store = {
+  get(k, d){ try{ const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; }catch(e){ return d; } },
+  set(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
+};
+let appUrl = params.get("return") || store.get("appUrl", DEFAULT_APP_URL);
+if (params.get("return")) store.set("appUrl", appUrl);
+let items = SINGLE ? [] : store.get("scanned", []);   // [{isbn,title,author,cover}]
+let stream = null, timer = null, detector = null, reader = null, lastCode = "", lastAt = 0, torchOn = false;
+
+const $ = s => document.querySelector(s);
+function toast(m){ const t=$("#toast"); t.textContent=m; t.hidden=false; clearTimeout(toast.h); toast.h=setTimeout(()=>t.hidden=true,2200); }
+const esc = v => String(v == null ? "" : v).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+function backUrl(){ return appUrl; }
+function sendUrl(list){ return appUrl + (appUrl.includes("?") ? "&" : "?") + "isbns=" + list.join(","); }
+
+$("#backLink").href = backUrl();
+if (SINGLE){ $("#listTitle").textContent = "Scan one book"; $("#sendBtn").hidden = true; $(".sendbar").hidden = true; document.body.style.paddingBottom = "24px"; }
+
+/* ---------- ISBN helpers ---------- */
+function validIsbn13(c){
+  if(!/^97[89]\d{10}$/.test(c)) return false;
+  let sum=0; for(let i=0;i<12;i++) sum += (+c[i]) * (i%2 ? 3 : 1);
+  return (10 - sum%10) % 10 === +c[12];
+}
+function toIsbn13(raw){
+  const d = String(raw).replace(/[^0-9Xx]/g,"").toUpperCase();
+  if (d.length === 13) return validIsbn13(d) ? d : null;
+  if (d.length === 10){
+    const core = "978" + d.slice(0,9); let sum=0;
+    for(let i=0;i<12;i++) sum += (+core[i]) * (i%2 ? 3 : 1);
+    return core + ((10 - sum%10) % 10);
+  }
+  return null;
+}
+
+/* ---------- List ---------- */
+function render(){
+  const n = items.length;
+  $("#clearBtn").hidden = !n || SINGLE;
+  $("#sendBtn").disabled = !n;
+  $("#sendBtn").textContent = n ? `Send ${n} book${n===1?"":"s"} to library` : "Send to library";
+  if (!SINGLE) $("#listTitle").textContent = n ? `Scanned books (${n})` : "Scanned books";
+  $("#list").innerHTML = n ? items.slice().reverse().map(b => `<div class="item"><div class="cv">${b.cover?`<img src="${esc(b.cover)}" alt="" onerror="this.remove()">`:""}</div>
+    <div class="tx"><div class="t">${esc(b.title || "Looking up...")}</div><div class="a">${esc(b.author || "")}${b.author?" · ":""}${esc(b.isbn)}</div></div>
+    <button class="x" data-rm="${esc(b.isbn)}" aria-label="Remove">×</button></div>`).join("")
+    : `<div class="empty">${!SINGLE && store.get("lastSent", []).length ? `<p style="margin:0 0 10px"><button class="btn" data-restore="1">Restore the last list I sent</button></p>` : ""}${SINGLE ? "Scan the barcode and you'll go straight back to the library with the book filled in." : "Books you scan show up here. When you're done, send them all to the library and add the details one by one."}</div>`;
+  if (!SINGLE) store.set("scanned", items);
+}
+function lookupTitle(item){
+  fetch("https://openlibrary.org/api/books?bibkeys=ISBN:" + item.isbn + "&format=json&jscmd=data")
+    .then(r => r.json()).then(j => {
+      const d = j["ISBN:" + item.isbn];
+      item.title = d && d.title ? d.title : "Title not found (you can type it in the app)";
+      item.author = d && d.authors ? d.authors.map(a => a.name).join(", ") : "";
+      item.cover = d && d.cover ? (d.cover.small || d.cover.medium) : "";
+      render();
+    }).catch(() => { item.title = "Couldn't look up the title"; render(); });
+}
+function addIsbn(isbn, fromCamera){
+  if (SINGLE){ stopCamera(); location.href = appUrl + (appUrl.includes("?") ? "&" : "?") + "isbn=" + isbn; return; }
+  if (items.some(b => b.isbn === isbn)){ if(!fromCamera) toast("Already in the list"); return; }
+  const item = { isbn, title: "", author: "", cover: "" };
+  items.push(item); render(); lookupTitle(item);
+  toast("Added " + isbn);
+}
+
+/* ---------- Feedback ---------- */
+let audioCtx = null;
+function beep(){
+  try{
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+    o.frequency.value = 1320; g.gain.value = 0.12; o.connect(g); g.connect(audioCtx.destination);
+    o.start(); o.stop(audioCtx.currentTime + 0.09);
+  }catch(e){}
+  try{ navigator.vibrate && navigator.vibrate(80); }catch(e){}
+  const f = $("#frame"); f.classList.add("hit"); setTimeout(() => f.classList.remove("hit"), 400);
+}
+function status(msg){ const s=$("#status"); s.textContent=msg; s.hidden=!msg; }
+
+/* ---------- Camera ---------- */
+function startCamera(){
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+    $("#startMsg").innerHTML = '<span class="err">This browser can\'t use the camera. Open this page in Safari (iPhone) or Chrome (Android).</span>'; return;
+  }
+  $("#startMsg").textContent = "Starting the camera...";
+  try{ audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)(); audioCtx.resume && audioCtx.resume(); }catch(e){}
+  navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false })
+  .then(s => {
+    stream = s; const v = $("#video"); v.srcObject = s;
+    $("#startBox").hidden = true; $("#frame").hidden = false; $("#stopBtn").hidden = false;
+    status("Hold a barcode inside the box");
+    const track = s.getVideoTracks()[0];
+    try{ const caps = track.getCapabilities ? track.getCapabilities() : {}; $("#torchBtn").hidden = !caps.torch; }catch(e){}
+    try{ detector = ("BarcodeDetector" in window) ? new BarcodeDetector({ formats: ["ean_13"] }) : null; }catch(e){ detector = null; }
+    return v.play().catch(()=>{}).then(() => { timer = setTimeout(tick, 300); });
+  })
+  .catch(e => {
+    const denied = e && (e.name === "NotAllowedError" || e.name === "SecurityError");
+    $("#startMsg").innerHTML = denied
+      ? '<span class="err">Camera access was denied.</span> On iPhone: Settings > Safari > Camera > Allow. On Android: tap the icon left of the address bar > Permissions > Camera. Then reload this page.'
+      : '<span class="err">The camera couldn\'t start (' + esc(e && e.name || "unknown error") + ').</span> Close other apps using the camera and try again.';
+  });
+}
+function stopCamera(){
+  clearTimeout(timer); timer = null;
+  if (stream) stream.getTracks().forEach(t => t.stop()); stream = null;
+  $("#video").srcObject = null; $("#startBox").hidden = false; $("#frame").hidden = true; $("#stopBtn").hidden = true; $("#torchBtn").hidden = true;
+  $("#startBtn").textContent = "Start camera"; $("#startMsg").textContent = "Camera stopped."; status("");
+}
+function grabFrame(wide){
+  const v = $("#video"), vw = v.videoWidth, vh = v.videoHeight; if (!vw || !vh) return null;
+  const V = v.getBoundingClientRect(), F = $("#frame").getBoundingClientRect();
+  const sc = Math.max(V.width / vw, V.height / vh), offX = (V.width - vw * sc) / 2, offY = (V.height - vh * sc) / 2;
+  const pad = wide ? 0.5 : 0.12;
+  let sx = (F.left - V.left - offX) / sc, sy = (F.top - V.top - offY) / sc, sw = F.width / sc, sh = F.height / sc;
+  sx -= sw * pad; sw *= 1 + 2 * pad; sy -= sh * pad; sh *= 1 + 2 * pad;
+  sx = Math.max(0, sx); sy = Math.max(0, sy); sw = Math.min(vw - sx, sw); sh = Math.min(vh - sy, sh);
+  const c = document.createElement("canvas"), s = Math.min(1, 1280 / sw);
+  c.width = Math.max(1, Math.round(sw * s)); c.height = Math.max(1, Math.round(sh * s));
+  c.getContext("2d").drawImage(v, sx, sy, sw, sh, 0, 0, c.width, c.height); return c;
+}
+function zxing(c){
+  if (!window.ZXing) return null; const Z = window.ZXing;
+  if (!reader){ const h = new Map(); h.set(Z.DecodeHintType.POSSIBLE_FORMATS, [Z.BarcodeFormat.EAN_13]); h.set(Z.DecodeHintType.TRY_HARDER, true); reader = new Z.MultiFormatReader(); reader.setHints(h); }
+  /* Try the frame at two sizes with two contrast methods; only a valid ISBN counts. */
+  const sizes = [c];
+  const half = document.createElement("canvas"); half.width = Math.round(c.width * 0.6); half.height = Math.round(c.height * 0.6);
+  half.getContext("2d").drawImage(c, 0, 0, half.width, half.height); sizes.push(half);
+  for (const cv of sizes){
+    for (const Bin of [Z.HybridBinarizer, Z.GlobalHistogramBinarizer]){
+      try{ const t = reader.decode(new Z.BinaryBitmap(new Bin(new Z.HTMLCanvasElementLuminanceSource(cv)))).getText(); if (validIsbn13(t)) return t; }catch(e){}
+    }
+  }
+  return null;
+}
+let tickN = 0;
+function tick(){
+  if (!stream) return;
+  const c = grabFrame(++tickN % 3 === 0);
+  if (!c){ timer = setTimeout(tick, 200); return; }
+  const p = detector ? detector.detect(c).then(l => l.map(b => b.rawValue).find(validIsbn13) || null).catch(() => zxing(c)) : Promise.resolve(zxing(c));
+  p.then(code => {
+    if (!stream) return;
+    const now = Date.now();
+    if (code && !(code === lastCode && now - lastAt < 2500)){
+      lastCode = code; lastAt = now;
+      const dup = !SINGLE && items.some(b => b.isbn === code);
+      if (dup){ status("Already scanned. Next book!"); }
+      else { beep(); status("Got it! Next book."); addIsbn(code, true); }
+    } else if (code){ lastAt = now; }
+    if (stream) timer = setTimeout(tick, code ? 600 : 120);
+  });
+}
+
+/* ---------- Events ---------- */
+$("#startBtn").addEventListener("click", startCamera);
+$("#stopBtn").addEventListener("click", stopCamera);
+$("#torchBtn").addEventListener("click", () => {
+  if (!stream) return; torchOn = !torchOn;
+  stream.getVideoTracks()[0].applyConstraints({ advanced: [{ torch: torchOn }] }).catch(() => toast("Flashlight isn't available"));
+  $("#torchBtn").textContent = torchOn ? "Flashlight off" : "Flashlight";
+});
+$("#manualForm").addEventListener("submit", e => {
+  e.preventDefault(); const i = toIsbn13($("#manual").value);
+  if (!i){ toast("That doesn't look like a valid ISBN"); return; }
+  $("#manual").value = ""; addIsbn(i, false);
+});
+$("#list").addEventListener("click", e => {
+  if (e.target.closest("[data-restore]")){ items = store.get("lastSent", []); render(); return; }
+  const b = e.target.closest("[data-rm]"); if (!b) return; items = items.filter(x => x.isbn !== b.dataset.rm); render(); });
+$("#clearBtn").addEventListener("click", function(){
+  if (this.dataset.c !== "1"){ this.dataset.c = "1"; this.textContent = "Tap again to clear"; return; }
+  this.dataset.c = ""; this.textContent = "Clear list"; items = []; render();
+});
+$("#sendBtn").addEventListener("click", () => {
+  if (!items.length) return;
+  const list = items.map(b => b.isbn); stopCamera();
+  store.set("lastSent", items); items = []; store.set("scanned", []);
+  location.href = sendUrl(list);
+});
+document.addEventListener("visibilitychange", () => { if (document.hidden && stream) stopCamera(); });
+items.forEach(b => { if (!b.title) lookupTitle(b); });
+render();
+</script>
+</body>
+</html>
